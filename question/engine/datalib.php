@@ -226,6 +226,26 @@ class question_engine_data_mapper {
         $record = $this->make_step_record($step, $questionattemptid, $seq);
         $record->id = $this->db->insert_record('question_attempt_steps', $record);
 
+        // Params used by the events below.
+        $params = array(
+        		'objectid' => $questionattemptid,
+        		'relateduserid' =>  $step->get_user_id(),
+        		'context' => $context,
+        );
+        $state = (string) $step->get_state();
+        if($state == "todo"){
+	        $event = core\event\question_attempt_created::create($params);
+        }elseif($state == "complete"){
+	        $event = core\event\question_attempt_answered::create($params);
+        }elseif($state == "gradedright" || $state == "gradedwrong" || $state == "gradedpartial"){
+	        $event = core\event\question_attempt_graded::create($params);
+        }
+        // Trigger the event.
+        if(isset($event)){
+	        $event->add_record_snapshot('question_attempt_steps', $record);
+        	$event->trigger();
+        }
+        
         return $this->prepare_step_data($step, $record->id, $context);
     }
 
