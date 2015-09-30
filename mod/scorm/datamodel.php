@@ -16,7 +16,7 @@
 
 require_once('../../config.php');
 require_once($CFG->dirroot.'/mod/scorm/locallib.php');
-
+require_once($CFG->dirroot.'/mod/scorm/scormlocallib.php');
 $id = optional_param('id', '', PARAM_INT);       // Course Module ID, or
 $a = optional_param('a', '', PARAM_INT);         // scorm ID
 $scoid = required_param('scoid', PARAM_INT);  // sco ID
@@ -57,12 +57,14 @@ if (confirm_sesskey() && (!empty($scoid))) {
         // Preload all current tracking data.
         $trackdata = $DB->get_records('scorm_scoes_track', array('userid' => $USER->id, 'scormid' => $scorm->id, 'scoid' => $scoid,
                                                                  'attempt' => $attempt), '', 'element, id, value, timemodified');
+        $scormlocallib = new scormlocallib();
         foreach (data_submitted() as $element => $value) {
             $element = str_replace('__', '.', $element);
             if (substr($element, 0, 3) == 'cmi') {
                 $netelement = preg_replace('/\.N(\d+)\./', "\.\$1\.", $element);
                 $result = scorm_insert_track($USER->id, $scorm->id, $scoid, $attempt, $element, $value, $scorm->forcecompleted,
                                              $trackdata) && $result;
+                $scormlocallib->trackData($element, $value);
             }
             if (substr($element, 0, 15) == 'adl.nav.request') {
                 // SCORM 2004 Sequencing Request.
@@ -88,6 +90,21 @@ if (confirm_sesskey() && (!empty($scoid))) {
                 }
             }
         }
+        $context = context_module::instance($cm->id);
+        $sco = scorm_get_sco($scoid);
+        // build out event data array
+        $eventData = [
+            'scoid' => 		$scoid,
+            'scormid' => 	$a,
+            'courseid' => 	$id,
+            'attempt' => 	$attempt,
+            'context' => 	$context,
+            'cm' => 		$cm,
+            'scorm' => 		$scorm,
+            'sco' => 		$sco,
+        ];
+        // add conditional event data
+        $scormlocallib->triggerScormEvents($eventData);
     }
     if ($result) {
         echo "true\n0";
